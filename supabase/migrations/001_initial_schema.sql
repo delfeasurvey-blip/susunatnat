@@ -197,45 +197,45 @@ alter table public.landing_settings enable row level security;
 alter table public.about_settings enable row level security;
 
 -- =============================================
--- RLS Policies: Public read, authenticated write
+-- RLS Policies: Public read, anon/authenticated write
 -- =============================================
 
--- Products: anyone can read, authenticated can write
+-- Products: anyone can read, anyone can write (admin protected by app passcode)
 create policy "Public read products" on public.products for select using (true);
-create policy "Authenticated write products" on public.products for all using (auth.role() = 'authenticated');
+create policy "Write products" on public.products for all using (auth.role() in ('anon', 'authenticated'));
 
--- Mitra SPPG: anyone can read, authenticated can write
+-- Mitra SPPG: anyone can read, anyone can write
 create policy "Public read mitra_sppg" on public.mitra_sppg for select using (true);
-create policy "Authenticated write mitra_sppg" on public.mitra_sppg for all using (auth.role() = 'authenticated');
+create policy "Write mitra_sppg" on public.mitra_sppg for all using (auth.role() in ('anon', 'authenticated'));
 
--- Articles: anyone can read, authenticated can write
+-- Articles: anyone can read, anyone can write
 create policy "Public read articles" on public.articles for select using (true);
-create policy "Authenticated write articles" on public.articles for all using (auth.role() = 'authenticated');
+create policy "Write articles" on public.articles for all using (auth.role() in ('anon', 'authenticated'));
 
--- Lab Reports: anyone can read, authenticated can write
+-- Lab Reports: anyone can read, anyone can write
 create policy "Public read lab_reports" on public.lab_reports for select using (true);
-create policy "Authenticated write lab_reports" on public.lab_reports for all using (auth.role() = 'authenticated');
+create policy "Write lab_reports" on public.lab_reports for all using (auth.role() in ('anon', 'authenticated'));
 
--- Orders: anyone can read, authenticated can write
+-- Orders: anyone can read, anyone can write
 create policy "Public read orders" on public.orders for select using (true);
-create policy "Authenticated write orders" on public.orders for all using (auth.role() = 'authenticated');
+create policy "Write orders" on public.orders for all using (auth.role() in ('anon', 'authenticated'));
 
--- Deliveries: anyone can read, authenticated can write
+-- Deliveries: anyone can read, anyone can write
 create policy "Public read deliveries" on public.deliveries for select using (true);
-create policy "Authenticated write deliveries" on public.deliveries for all using (auth.role() = 'authenticated');
+create policy "Write deliveries" on public.deliveries for all using (auth.role() in ('anon', 'authenticated'));
 
--- Tickets: anyone can read, authenticated can write
+-- Tickets: anyone can read, anyone can write
 create policy "Public read tickets" on public.tickets for select using (true);
-create policy "Authenticated write tickets" on public.tickets for all using (auth.role() = 'authenticated');
+create policy "Write tickets" on public.tickets for all using (auth.role() in ('anon', 'authenticated'));
 
--- Promos: anyone can read, authenticated can write
+-- Promos: anyone can read, anyone can write
 create policy "Public read promos" on public.promos for select using (true);
-create policy "Authenticated write promos" on public.promos for all using (auth.role() = 'authenticated');
+create policy "Write promos" on public.promos for all using (auth.role() in ('anon', 'authenticated'));
 
--- Landing Settings: anyone can read, authenticated can write
+-- Landing Settings: anyone can read, anyone can write
 create policy "Public read landing_settings" on public.landing_settings for select using (true);
-create policy "Authenticated write landing_settings" on public.landing_settings for all using (auth.role() = 'authenticated');
+create policy "Write landing_settings" on public.landing_settings for all using (auth.role() in ('anon', 'authenticated'));
 
--- About Settings: anyone can read, authenticated can write
+-- About Settings: anyone can read, anyone can write
 create policy "Public read about_settings" on public.about_settings for select using (true);
-create policy "Authenticated write about_settings" on public.about_settings for all using (auth.role() = 'authenticated');
+create policy "Write about_settings" on public.about_settings for all using (auth.role() in ('anon', 'authenticated'));
