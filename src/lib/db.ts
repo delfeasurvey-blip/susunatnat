@@ -1,6 +1,9 @@
 import { supabase } from './supabase';
 import type { Product, MitraSPPG, Article, LabReport, Order, DeliveryLog, Ticket, Promo } from '../types';
 
+// Supabase integration - data persisted to cloud database
+// Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Vercel env vars
+
 // =============================================
 // Products
 // =============================================
