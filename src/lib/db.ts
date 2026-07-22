@@ -376,56 +376,26 @@ export async function seedInitialData(): Promise<void> {
 
   // Import and seed all initial data
   const { PRODUCTS, MITRA_SPPG, ARTICLES, LAB_REPORTS, INITIAL_ORDERS, INITIAL_DELIVERIES, INITIAL_TICKETS, INITIAL_PROMOS } = await import('../data');
-  const defaultLandingSettings = {
-    heroTitle: 'Susu Pasteurisasi Segar & Higienis untuk Anak Bangsa',
-    heroSubtitle: 'Kami memahami pentingnya gizi seimbang harian anak sekolah...',
-    campaignTitle: 'Kampanye Gizi Nasional:',
-    campaignSlogan: '"Menu MBG Belum Lengkap Tanpa Susu!"',
-    campaignDesc: 'Mengandung Kalsium Tinggi, Protein Alami, dan Tanpa Bahan Pengawet Buatan.',
-    mitraCount: '52 Dapur',
-    peternakCount: '150+ Mitra',
-    freezerTitle: 'Klaim Freezer Box RSA Gratis untuk Dapur Anda!',
-    freezerDesc: 'Dapatkan fasilitas Freezer Box RSA Gratis...',
-    whatsappNumber: '0812-1768-7815'
-  };
-  const defaultAboutSettings = {
-    profilTitle: 'PT Satriyo Abimanyu Prabangkara',
-    profilDesc: 'Kami adalah industri pengolahan susu pasteurisasi modern...',
-    capacityTitle: 'Kapasitas Produksi Harian',
-    capacityValue: '15.000+ Cup / Hari',
-    capacityDesc: 'Fasilitas pasteurisasi kontinu modern...',
-    hygieneValue: 'HACCP & GMP Compliant',
-    sourcingValue: '100% Sapi Perah Malang',
-    visiTitle: 'Visi Khusus Program Gizi',
-    visiDesc: 'Menjadi pilar penyuplai utama susu pasteurisasi...',
-    misiList: [
-      'Mempertahankan kemurnian 100% susu sapi murni...',
-      'Menjaga suhu rantai dingin (cold chain) stabil...',
-      'Menerapkan digitalisasi logistik transparan...',
-      'Meringankan beban dapur SPPG...'
-    ]
-  };
 
-  // Insert all data
-  const productsInsert = PRODUCTS.map(p => ({ ...p, id: p.id }));
-  const mitraInsert = MITRA_SPPG.map(m => ({ ...m, id: m.id }));
-  const articlesInsert = ARTICLES.map(a => ({ ...a, id: a.id }));
-  const labReportsInsert = LAB_REPORTS.map(l => ({ ...l, id: l.id }));
-  const ordersInsert = INITIAL_ORDERS.map(o => ({ ...o, id: o.id }));
-  const deliveriesInsert = INITIAL_DELIVERIES.map(d => ({ ...d, id: d.id }));
-  const ticketsInsert = INITIAL_TICKETS.map(t => ({ ...t, id: t.id }));
-  const promosInsert = INITIAL_PROMOS.map(p => ({ ...p, id: p.id }));
+  // Insert all data in parallel
+  const [prodResult, mitraResult, artResult, labResult, orderResult, delivResult, ticketResult, promoResult] = await Promise.all([
+    supabase.from('products').insert(PRODUCTS.map(p => ({ ...p, id: p.id }))),
+    supabase.from('mitra_sppg').insert(MITRA_SPPG.map(m => ({ ...m, id: m.id }))),
+    supabase.from('articles').insert(ARTICLES.map(a => ({ ...a, id: a.id }))),
+    supabase.from('lab_reports').insert(LAB_REPORTS.map(l => ({ ...l, id: l.id }))),
+    supabase.from('orders').insert(INITIAL_ORDERS.map(o => ({ ...o, id: o.id }))),
+    supabase.from('deliveries').insert(INITIAL_DELIVERIES.map(d => ({ ...d, id: d.id }))),
+    supabase.from('tickets').insert(INITIAL_TICKETS.map(t => ({ ...t, id: t.id }))),
+    supabase.from('promos').insert(INITIAL_PROMOS.map(p => ({ ...p, id: p.id }))),
+  ]);
 
-  await supabase.from('products').insert(productsInsert);
-  await supabase.from('mitra_sppg').insert(mitraInsert);
-  await supabase.from('articles').insert(articlesInsert);
-  await supabase.from('lab_reports').insert(labReportsInsert);
-  await supabase.from('orders').insert(ordersInsert);
-  await supabase.from('deliveries').insert(deliveriesInsert);
-  await supabase.from('tickets').insert(ticketsInsert);
-  await supabase.from('promos').insert(promosInsert);
-  await supabase.from('landing_settings').upsert({ id: 1, ...defaultLandingSettings });
-  await supabase.from('about_settings').upsert({ id: 1, ...defaultAboutSettings });
+  // Check for errors
+  const errors = [prodResult, mitraResult, artResult, labResult, orderResult, delivResult, ticketResult, promoResult]
+    .filter(r => r.error)
+    .map(r => r.error!.message);
+  if (errors.length > 0) {
+    console.error('Seed errors:', errors);
+  }
 }
 
 // =============================================
