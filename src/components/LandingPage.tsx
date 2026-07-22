@@ -306,7 +306,7 @@ export default function LandingPage({ setActiveTab, openPortal, landingSettings,
                   return (
                     <div
                       key={promo.id}
-                      className="bg-white rounded-2xl border border-slate-150 shadow-sm hover:shadow-md hover:border-sky-200 transition-all duration-300 flex flex-col overflow-hidden group cursor-pointer"
+                      className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-sky-200 transition-all duration-300 flex flex-col overflow-hidden group cursor-pointer"
                       onClick={() => setSelectedPromo(promo)}
                     >
                       {/* Media Display Container */}
@@ -371,7 +371,7 @@ export default function LandingPage({ setActiveTab, openPortal, landingSettings,
                 })}
             </div>
           ) : (
-            <div className="text-center bg-white border border-slate-150 rounded-2xl py-12 px-6 space-y-4 max-w-md mx-auto shadow-sm">
+            <div className="text-center bg-white border border-slate-200 rounded-2xl py-12 px-6 space-y-4 max-w-md mx-auto shadow-sm">
               <AlertCircle className="w-12 h-12 text-slate-300 mx-auto" />
               <div className="space-y-1">
                 <h4 className="font-bold text-slate-700 text-base">Tidak ada Promo Aktif</h4>
@@ -758,7 +758,7 @@ export default function LandingPage({ setActiveTab, openPortal, landingSettings,
                     </h2>
                   </div>
 
-                  <div className="text-xs text-slate-600 leading-relaxed bg-white border border-slate-150 p-3.5 sm:p-4 rounded-2xl shadow-sm space-y-2">
+                  <div className="text-xs text-slate-600 leading-relaxed bg-white border border-slate-200 p-3.5 sm:p-4 rounded-2xl shadow-sm space-y-2">
                     <p className="font-semibold text-slate-800 uppercase text-[10px] tracking-wider border-b pb-1 flex items-center space-x-1 text-sky-600">
                       <Info className="w-3.5 h-3.5" />
                       <span>Detail Informasi & Penawaran:</span>
