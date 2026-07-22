@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Product, Article, LabReport, MitraSPPG, Order, Ticket, Promo } from '../types';
 import { formatWhatsAppUrl } from '../utils';
+import { useDBSync } from '../hooks/useDBSync';
 
 interface AdminPanelProps {
   products: Product[];
@@ -159,6 +160,9 @@ export default function AdminPanel({
   const [isDragging, setIsDragging] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
+  // Supabase sync
+  const { useDB, syncProduct, syncMitra, syncArticle, syncLab, syncOrder, syncDelivery, syncTicket, syncPromo, syncLandingSettings, syncAboutSettings } = useDBSync();
+
   // Compress image helper using canvas to keep Base64 size lightweight (~100KB instead of 5MB)
   const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -298,6 +302,8 @@ export default function AdminPanel({
     }
 
     setPromos(updatedPromos);
+    if (editingPromo) { syncPromo(promoData, 'update').catch(console.error); }
+    else { syncPromo(promoData, 'insert').catch(console.error); }
     setIsPromoModalOpen(false);
   };
 
@@ -305,6 +311,7 @@ export default function AdminPanel({
     if (confirm('Apakah Anda yakin ingin menghapus promo ini?')) {
       const updatedPromos = promos.filter(p => p.id !== id);
       setPromos(updatedPromos);
+      syncPromo({ id }, 'delete').catch(console.error);
       triggerNotification('Promo berhasil dihapus!');
     }
   };
@@ -401,6 +408,8 @@ export default function AdminPanel({
 
     setProducts(updatedProducts);
     localStorage.setItem('natnat_products_v2', JSON.stringify(updatedProducts));
+    if (editingProduct) { syncProduct(productData, 'update').catch(console.error); }
+    else { syncProduct(productData, 'insert').catch(console.error); }
     setIsProductModalOpen(false);
   };
 
@@ -409,6 +418,7 @@ export default function AdminPanel({
       const updated = products.filter(p => p.id !== id);
       setProducts(updated);
       localStorage.setItem('natnat_products_v2', JSON.stringify(updated));
+      syncProduct({ id }, 'delete').catch(console.error);
       triggerNotification('Produk berhasil dihapus!');
     }
   };
@@ -459,6 +469,8 @@ export default function AdminPanel({
 
     setArticles(updatedArticles);
     localStorage.setItem('natnat_articles_v2', JSON.stringify(updatedArticles));
+    if (editingArticle) { syncArticle(articleData, 'update').catch(console.error); }
+    else { syncArticle(articleData, 'insert').catch(console.error); }
     setIsArticleModalOpen(false);
   };
 
@@ -467,6 +479,7 @@ export default function AdminPanel({
       const updated = articles.filter(a => a.id !== id);
       setArticles(updated);
       localStorage.setItem('natnat_articles_v2', JSON.stringify(updated));
+      syncArticle({ id }, 'delete').catch(console.error);
       triggerNotification('Artikel berhasil dihapus!');
     }
   };
@@ -521,6 +534,8 @@ export default function AdminPanel({
 
     setLabReports(updatedLabs);
     localStorage.setItem('natnat_lab_reports_v2', JSON.stringify(updatedLabs));
+    if (editingLab) { syncLab(labData, 'update').catch(console.error); }
+    else { syncLab(labData, 'insert').catch(console.error); }
     setIsLabModalOpen(false);
   };
 
@@ -529,6 +544,7 @@ export default function AdminPanel({
       const updated = labReports.filter(l => l.id !== id);
       setLabReports(updated);
       localStorage.setItem('natnat_lab_reports_v2', JSON.stringify(updated));
+      syncLab({ id }, 'delete').catch(console.error);
       triggerNotification('Data analisis batch berhasil dihapus!');
     }
   };
@@ -581,6 +597,8 @@ export default function AdminPanel({
 
     setMitraList(updatedMitra);
     localStorage.setItem('natnat_mitra_v2', JSON.stringify(updatedMitra));
+    if (editingMitra) { syncMitra(mData, 'update').catch(console.error); }
+    else { syncMitra(mData, 'insert').catch(console.error); }
     setIsMitraModalOpen(false);
   };
 
@@ -589,16 +607,17 @@ export default function AdminPanel({
       const updated = mitraList.filter(m => m.id !== id);
       setMitraList(updated);
       localStorage.setItem('natnat_mitra_v2', JSON.stringify(updated));
+      syncMitra({ id }, 'delete').catch(console.error);
       triggerNotification('Kemitraan berhasil dihapus!');
     }
   };
 
 
-  // SAVE CORE PAGE COPY/SETTINGS
   const handleSaveLandingSettings = (e: React.FormEvent) => {
     e.preventDefault();
     setLandingSettings(tempLanding);
     localStorage.setItem('natnat_landing_settings_v2', JSON.stringify(tempLanding));
+    syncLandingSettings(tempLanding).catch(console.error);
     triggerNotification('Pengaturan Landing Page berhasil disimpan!');
   };
 
@@ -611,6 +630,7 @@ export default function AdminPanel({
     };
     setAboutSettings(updatedAbout);
     localStorage.setItem('natnat_about_settings_v2', JSON.stringify(updatedAbout));
+    syncAboutSettings(updatedAbout).catch(console.error);
     triggerNotification('Profil & Visi Misi berhasil disimpan!');
   };
 
@@ -619,6 +639,7 @@ export default function AdminPanel({
     const updated = orders.map(o => o.id === id ? { ...o, status: newStatus } : o);
     setOrders(updated);
     localStorage.setItem('natnat_orders', JSON.stringify(updated));
+    syncOrder({ id, status: newStatus }, 'update').catch(console.error);
     triggerNotification(`Status pesanan ${id} diubah menjadi: ${newStatus}`);
   };
 
@@ -626,6 +647,7 @@ export default function AdminPanel({
     const updated = tickets.map(t => t.id === id ? { ...t, status: newStatus } : t);
     setTickets(updated);
     localStorage.setItem('natnat_tickets', JSON.stringify(updated));
+    syncTicket({ id, status: newStatus }, 'update').catch(console.error);
     triggerNotification(`Status tiket aduan ${id} diubah menjadi: ${newStatus}`);
   };
 
@@ -633,6 +655,7 @@ export default function AdminPanel({
     const updated = tickets.map(t => t.id === id ? { ...t, status: 'Selesai' as const, resolution } : t);
     setTickets(updated);
     localStorage.setItem('natnat_tickets', JSON.stringify(updated));
+    syncTicket({ id, status: 'Selesai', resolution }, 'update').catch(console.error);
     triggerNotification(`Aduan tiket ${id} berhasil diselesaikan!`);
   };
 
@@ -641,6 +664,7 @@ export default function AdminPanel({
       const updated = tickets.filter(t => t.id !== id);
       setTickets(updated);
       localStorage.setItem('natnat_tickets', JSON.stringify(updated));
+      syncTicket({ id }, 'delete').catch(console.error);
       triggerNotification('Tiket aduan berhasil dihapus!');
     }
   };
@@ -650,6 +674,7 @@ export default function AdminPanel({
       const updated = orders.filter(o => o.id !== id);
       setOrders(updated);
       localStorage.setItem('natnat_orders', JSON.stringify(updated));
+      syncOrder({ id }, 'delete').catch(console.error);
       triggerNotification('Log pesanan berhasil dihapus!');
     }
   };

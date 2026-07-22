@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Order, DeliveryLog, Ticket, LabReport, MitraSPPG, Product } from '../types';
 import { ShieldCheck, LogIn, LogOut, KeyRound, Truck, ShoppingCart, RefreshCw, CheckCircle2, AlertTriangle, FilePen, Activity, FileSpreadsheet, Plus, HelpCircle, ThermometerSnowflake, FileSignature, ArrowRight } from 'lucide-react';
+import { useDBSync } from '../hooks/useDBSync';
 
 interface PortalSPPGProps {
   products: Product[];
@@ -28,6 +29,7 @@ export default function PortalSPPG({
   setLabReports
 }: PortalSPPGProps) {
   const [currentUser, setCurrentUser] = useState<{ name: string; role: 'operator' | 'qc' | 'driver'; id: string; targetId?: string } | null>(null);
+  const { syncOrder, syncDelivery, syncTicket, useDB } = useDBSync();
 
   // SPPG Form states
   const [orderProduct, setOrderProduct] = useState(() => products[0]?.id || 'prod-01');
@@ -53,7 +55,7 @@ export default function PortalSPPG({
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryLog | null>(null);
   const [simulatedTemp, setSimulatedTemp] = useState(3.0);
 
-  // Sync state helper that writes to props & localStorage
+  // Sync state helper that writes to props, localStorage, and Supabase
   const syncDB = (updatedOrders: Order[], updatedDeliveries: DeliveryLog[], updatedTickets: Ticket[]) => {
     setOrders(updatedOrders);
     setDeliveries(updatedDeliveries);
@@ -62,6 +64,13 @@ export default function PortalSPPG({
     localStorage.setItem('natnat_orders', JSON.stringify(updatedOrders));
     localStorage.setItem('natnat_deliveries', JSON.stringify(updatedDeliveries));
     localStorage.setItem('natnat_tickets', JSON.stringify(updatedTickets));
+
+    // Sync new/updated orders to Supabase
+    if (useDB) {
+      updatedOrders.forEach(o => syncOrder(o, 'insert').catch(() => {}));
+      updatedDeliveries.forEach(d => syncDelivery(d, 'insert').catch(() => {}));
+      updatedTickets.forEach(t => syncTicket(t, 'insert').catch(() => {}));
+    }
   };
 
   // Sign BAST Handler

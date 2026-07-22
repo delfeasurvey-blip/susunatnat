@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import LandingPage from './components/LandingPage';
@@ -25,6 +25,20 @@ import {
   INITIAL_TICKETS,
   INITIAL_PROMOS
 } from './data';
+import {
+  fetchProducts, insertProduct, updateProduct, deleteProduct,
+  fetchMitra, insertMitra, updateMitra, deleteMitra,
+  fetchArticles, insertArticle, updateArticle, deleteArticle,
+  fetchLabReports, insertLabReport, updateLabReport, deleteLabReport,
+  fetchOrders, insertOrder, updateOrder, deleteOrder,
+  fetchDeliveries, insertDelivery, updateDelivery, deleteDelivery,
+  fetchTickets, insertTicket, updateTicket, deleteTicket,
+  fetchPromos, insertPromo, updatePromo, deletePromo,
+  fetchLandingSettings, upsertLandingSettings,
+  fetchAboutSettings, upsertAboutSettings,
+  seedInitialData
+} from './lib/db';
+import { supabase } from './lib/supabase';
 import { Product, Article, LabReport, MitraSPPG, Order, DeliveryLog, Ticket, Promo } from './types';
 
 // Default Settings for Beranda / Landing Page
@@ -60,140 +74,106 @@ const defaultAboutSettings = {
   ]
 };
 
+// Check if Supabase is configured
+const isSupabaseConfigured = () => {
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  return !!(url && key && url !== 'https://your-project-id.supabase.co');
+};
+
+function getLocalStorageData(key: string, fallback: any) {
+  try {
+    const cached = localStorage.getItem(key);
+    return cached ? JSON.parse(cached) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('beranda');
+  const [supabaseReady, setSupabaseReady] = useState(false);
+  const useSupabase = isSupabaseConfigured();
 
-  // Initialize state with localStorage values or defaults from data.ts
-  const [products, setProducts] = useState<Product[]>(() => {
-    const cached = localStorage.getItem('natnat_products');
-    return cached ? JSON.parse(cached) : PRODUCTS;
-  });
+  // Initialize state from localStorage as fallback
+  const [products, setProducts] = useState<Product[]>(() => getLocalStorageData('natnat_products', PRODUCTS));
+  const [articles, setArticles] = useState<Article[]>(() => getLocalStorageData('natnat_articles', ARTICLES));
+  const [labReports, setLabReports] = useState<LabReport[]>(() => getLocalStorageData('natnat_lab_reports', LAB_REPORTS));
+  const [mitraList, setMitraList] = useState<MitraSPPG[]>(() => getLocalStorageData('natnat_mitra_list', MITRA_SPPG));
+  const [orders, setOrders] = useState<Order[]>(() => getLocalStorageData('natnat_orders', INITIAL_ORDERS));
+  const [deliveries, setDeliveries] = useState<DeliveryLog[]>(() => getLocalStorageData('natnat_deliveries', INITIAL_DELIVERIES));
+  const [tickets, setTickets] = useState<Ticket[]>(() => getLocalStorageData('natnat_tickets', INITIAL_TICKETS));
+  const [landingSettings, setLandingSettings] = useState<any>(() => getLocalStorageData('natnat_landing_settings', defaultLandingSettings));
+  const [aboutSettings, setAboutSettings] = useState<any>(() => getLocalStorageData('natnat_about_settings', defaultAboutSettings));
+  const [promos, setPromos] = useState<Promo[]>(() => getLocalStorageData('natnat_promos', INITIAL_PROMOS));
 
-  const [articles, setArticles] = useState<Article[]>(() => {
-    const cached = localStorage.getItem('natnat_articles');
-    return cached ? JSON.parse(cached) : ARTICLES;
-  });
-
-  const [labReports, setLabReports] = useState<LabReport[]>(() => {
-    const cached = localStorage.getItem('natnat_lab_reports');
-    return cached ? JSON.parse(cached) : LAB_REPORTS;
-  });
-
-  const [mitraList, setMitraList] = useState<MitraSPPG[]>(() => {
-    const cached = localStorage.getItem('natnat_mitra_list');
-    return cached ? JSON.parse(cached) : MITRA_SPPG;
-  });
-
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const cached = localStorage.getItem('natnat_orders');
-    return cached ? JSON.parse(cached) : INITIAL_ORDERS;
-  });
-
-  const [deliveries, setDeliveries] = useState<DeliveryLog[]>(() => {
-    const cached = localStorage.getItem('natnat_deliveries');
-    return cached ? JSON.parse(cached) : INITIAL_DELIVERIES;
-  });
-
-  const [tickets, setTickets] = useState<Ticket[]>(() => {
-    const cached = localStorage.getItem('natnat_tickets');
-    return cached ? JSON.parse(cached) : INITIAL_TICKETS;
-  });
-
-  const [landingSettings, setLandingSettings] = useState<any>(() => {
-    const cached = localStorage.getItem('natnat_landing_settings');
-    return cached ? JSON.parse(cached) : defaultLandingSettings;
-  });
-
-  const [aboutSettings, setAboutSettings] = useState<any>(() => {
-    const cached = localStorage.getItem('natnat_about_settings');
-    return cached ? JSON.parse(cached) : defaultAboutSettings;
-  });
-
-  const [promos, setPromos] = useState<Promo[]>(() => {
-    const cached = localStorage.getItem('natnat_promos');
-    return cached ? JSON.parse(cached) : INITIAL_PROMOS;
-  });
-
-  // Keep localStorage updated upon state modifications safely
+  // Load data from Supabase on mount
   useEffect(() => {
-    try {
-      localStorage.setItem('natnat_products', JSON.stringify(products));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded for products', e);
-    }
-  }, [products]);
+    if (!useSupabase) return;
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('natnat_articles', JSON.stringify(articles));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded for articles', e);
-    }
-  }, [articles]);
+    let cancelled = false;
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('natnat_lab_reports', JSON.stringify(labReports));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded for labReports', e);
-    }
-  }, [labReports]);
+    async function loadData() {
+      try {
+        // Seed initial data if tables are empty
+        await seedInitialData();
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('natnat_mitra_list', JSON.stringify(mitraList));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded for mitraList', e);
-    }
-  }, [mitraList]);
+        if (cancelled) return;
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('natnat_orders', JSON.stringify(orders));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded for orders', e);
-    }
-  }, [orders]);
+        const [
+          productsData, articlesData, labReportsData, mitraData,
+          ordersData, deliveriesData, ticketsData, promosData,
+          landingData, aboutData
+        ] = await Promise.all([
+          fetchProducts(), fetchArticles(), fetchLabReports(), fetchMitra(),
+          fetchOrders(), fetchDeliveries(), fetchTickets(), fetchPromos(),
+          fetchLandingSettings(), fetchAboutSettings()
+        ]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('natnat_deliveries', JSON.stringify(deliveries));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded for deliveries', e);
-    }
-  }, [deliveries]);
+        if (cancelled) return;
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('natnat_tickets', JSON.stringify(tickets));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded for tickets', e);
-    }
-  }, [tickets]);
+        if (productsData.length > 0) setProducts(productsData);
+        if (articlesData.length > 0) setArticles(articlesData);
+        if (labReportsData.length > 0) setLabReports(labReportsData);
+        if (mitraData.length > 0) setMitraList(mitraData);
+        if (ordersData.length > 0) setOrders(ordersData);
+        if (deliveriesData.length > 0) setDeliveries(deliveriesData);
+        if (ticketsData.length > 0) setTickets(ticketsData);
+        if (promosData.length > 0) setPromos(promosData);
+        if (landingData) setLandingSettings(landingData);
+        if (aboutData) setAboutSettings(aboutData);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('natnat_landing_settings', JSON.stringify(landingSettings));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded for landingSettings', e);
+        setSupabaseReady(true);
+      } catch (err) {
+        console.error('Failed to load data from Supabase:', err);
+        setSupabaseReady(false);
+      }
     }
-  }, [landingSettings]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('natnat_about_settings', JSON.stringify(aboutSettings));
-    } catch (e) {
-      console.warn('LocalStorage quota exceeded for aboutSettings', e);
-    }
-  }, [aboutSettings]);
+    loadData();
 
-  useEffect(() => {
+    return () => { cancelled = true; };
+  }, [useSupabase]);
+
+  // Keep localStorage as cache (backward compatibility)
+  const syncToLocalStorage = useCallback((key: string, value: any) => {
     try {
-      localStorage.setItem('natnat_promos', JSON.stringify(promos));
+      localStorage.setItem(key, JSON.stringify(value));
     } catch (e) {
-      console.warn('LocalStorage quota exceeded for promos', e);
+      console.warn(`LocalStorage quota exceeded for ${key}`, e);
     }
-  }, [promos]);
+  }, []);
+
+  useEffect(() => { syncToLocalStorage('natnat_products', products); }, [products, syncToLocalStorage]);
+  useEffect(() => { syncToLocalStorage('natnat_articles', articles); }, [articles, syncToLocalStorage]);
+  useEffect(() => { syncToLocalStorage('natnat_lab_reports', labReports); }, [labReports, syncToLocalStorage]);
+  useEffect(() => { syncToLocalStorage('natnat_mitra_list', mitraList); }, [mitraList, syncToLocalStorage]);
+  useEffect(() => { syncToLocalStorage('natnat_orders', orders); }, [orders, syncToLocalStorage]);
+  useEffect(() => { syncToLocalStorage('natnat_deliveries', deliveries); }, [deliveries, syncToLocalStorage]);
+  useEffect(() => { syncToLocalStorage('natnat_tickets', tickets); }, [tickets, syncToLocalStorage]);
+  useEffect(() => { syncToLocalStorage('natnat_landing_settings', landingSettings); }, [landingSettings, syncToLocalStorage]);
+  useEffect(() => { syncToLocalStorage('natnat_about_settings', aboutSettings); }, [aboutSettings, syncToLocalStorage]);
+  useEffect(() => { syncToLocalStorage('natnat_promos', promos); }, [promos, syncToLocalStorage]);
 
   const renderActiveComponent = () => {
     switch (activeTab) {
@@ -284,7 +264,16 @@ export default function App() {
 
       {/* Main Content Body */}
       <main className="flex-grow">
-        {renderActiveComponent()}
+        {useSupabase && !supabaseReady ? (
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+              <div className="inline-block w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="text-slate-500">Memuat data...</p>
+            </div>
+          </div>
+        ) : (
+          renderActiveComponent()
+        )}
       </main>
 
       {/* Footer Details */}
