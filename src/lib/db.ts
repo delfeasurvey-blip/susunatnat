@@ -388,12 +388,21 @@ export async function seedInitialData(): Promise<void> {
     supabase.from('promos').upsert(INITIAL_PROMOS.map(p => ({ ...p, id: p.id }))),
   ]);
 
-  // Check for errors
-  const errors = [prodResult, mitraResult, artResult, labResult, orderResult, delivResult, ticketResult, promoResult]
-    .filter(r => r.error)
-    .map(r => r.error!.message);
+  // Check for errors - log full details
+  const results = [prodResult, mitraResult, artResult, labResult, orderResult, delivResult, ticketResult, promoResult];
+  const tableNames = ['products', 'mitra_sppg', 'articles', 'lab_reports', 'orders', 'deliveries', 'tickets', 'promos'];
+  const errors = results.map((r, i) => {
+    if (r.error) {
+      console.error(`Seed error for ${tableNames[i]}:`, JSON.stringify(r.error));
+      return r.error.message;
+    }
+    return null;
+  }).filter(Boolean);
+  
   if (errors.length > 0) {
     console.error('Seed errors:', errors);
+  } else {
+    console.log('Seed completed successfully');
   }
 }
 
