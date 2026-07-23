@@ -38,7 +38,7 @@ import {
   fetchAboutSettings, upsertAboutSettings,
   seedInitialData
 } from './lib/db';
-import { supabase } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { Product, Article, LabReport, MitraSPPG, Order, DeliveryLog, Ticket, Promo } from './types';
 
 // Default Settings for Beranda / Landing Page
@@ -72,13 +72,6 @@ const defaultAboutSettings = {
     'Menerapkan digitalisasi logistik transparan untuk mendeteksi dini setiap kendala kualitas.',
     'Meringankan beban dapur SPPG dengan komitmen servis prima "Urusan Susu? Serahkan Pada Kami!"'
   ]
-};
-
-// Check if Supabase is configured
-const isSupabaseConfigured = () => {
-  const url = import.meta.env.VITE_SUPABASE_URL;
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-  return !!(url && key && url !== 'https://your-project-id.supabase.co');
 };
 
 function getLocalStorageData(key: string, fallback: any) {

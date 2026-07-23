@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Order, DeliveryLog, Ticket, LabReport, MitraSPPG, Product } from '../types';
 import { ShieldCheck, LogIn, LogOut, KeyRound, Truck, ShoppingCart, RefreshCw, CheckCircle2, AlertTriangle, FilePen, Activity, FileSpreadsheet, Plus, HelpCircle, ThermometerSnowflake, FileSignature, ArrowRight } from 'lucide-react';
-import { useDBSync } from '../hooks/useDBSync';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { insertOrder, insertDelivery, insertTicket } from '../lib/db';
 
 interface PortalSPPGProps {
   products: Product[];
@@ -29,7 +30,21 @@ export default function PortalSPPG({
   setLabReports
 }: PortalSPPGProps) {
   const [currentUser, setCurrentUser] = useState<{ name: string; role: 'operator' | 'qc' | 'driver'; id: string; targetId?: string } | null>(null);
-  const { syncOrder, syncDelivery, syncTicket, useDB } = useDBSync();
+  const useDB = isSupabaseConfigured();
+  
+  // Inline sync helpers (replaces useDBSync hook)
+  const syncOrder = async (order: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertOrder(order);
+  };
+  const syncDelivery = async (delivery: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertDelivery(delivery);
+  };
+  const syncTicket = async (ticket: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertTicket(ticket);
+  };
 
   // SPPG Form states
   const [orderProduct, setOrderProduct] = useState(() => products[0]?.id || 'prod-01');

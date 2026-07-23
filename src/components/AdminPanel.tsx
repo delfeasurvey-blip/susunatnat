@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Lock, KeyRound, Save, Plus, Edit, Trash2, CheckCircle, 
   Settings, Milk, FileText, Activity, Users, ShieldAlert,
@@ -6,9 +6,22 @@ import {
   HelpCircle, Sparkles, Film, Upload, Copy, Download, Code,
   Info, ExternalLink, FileJson, Phone
 } from 'lucide-react';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import {
+  insertProduct, updateProduct, deleteProduct,
+  insertMitra, updateMitra, deleteMitra,
+  insertArticle, updateArticle, deleteArticle,
+  insertLabReport, updateLabReport, deleteLabReport,
+  insertOrder, updateOrder, deleteOrder,
+  insertTicket, updateTicket, deleteTicket,
+  insertPromo, updatePromo, deletePromo,
+  insertDelivery, updateDelivery, deleteDelivery,
+  upsertLandingSettings,
+  upsertAboutSettings
+} from '../lib/db';
+import { loginWithEmail, registerFirstAdmin, logout as authLogout, isAdminSession, getCurrentUser } from '../lib/auth';
 import { Product, Article, LabReport, MitraSPPG, Order, Ticket, Promo } from '../types';
 import { formatWhatsAppUrl } from '../utils';
-import { useDBSync } from '../hooks/useDBSync';
 
 interface AdminPanelProps {
   products: Product[];
@@ -31,6 +44,9 @@ interface AdminPanelProps {
   setPromos: React.Dispatch<React.SetStateAction<Promo[]>>;
 }
 
+// Emergency access passcode from environment variable
+const ADMIN_PASSCODE = import.meta.env.VITE_ADMIN_PASSCODE || 'admin';
+
 type AdminTab = 'beranda_tentang' | 'promos' | 'produk' | 'artikel' | 'lab_reports' | 'mitra' | 'orders_tickets';
 
 export default function AdminPanel({
@@ -44,12 +60,51 @@ export default function AdminPanel({
   aboutSettings, setAboutSettings,
   promos, setPromos
 }: AdminPanelProps) {
-  // Authentication state
+  // Authentication state — Supabase Auth with emergency passcode fallback
+  const [authMethod, setAuthMethod] = useState<'email' | 'passcode'>('email');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [passcode, setPasscode] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return localStorage.getItem('natnat_admin_auth') === 'true';
   });
-  const [passcode, setPasscode] = useState('');
-  const [authError, setAuthError] = useState('');
+
+  // Restore Supabase session on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function restoreSession() {
+      const adminSession = await isAdminSession();
+      if (!cancelled && adminSession) {
+        setIsAuthenticated(true);
+        localStorage.setItem('natnat_admin_auth', 'true');
+      }
+    }
+    restoreSession();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Listen for Supabase auth state changes (logout from another tab, etc.)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        setIsAuthenticated(false);
+        localStorage.removeItem('natnat_admin_auth');
+      } else if (event === 'SIGNED_IN' && session.user) {
+        const admin = await isAdminSession();
+        if (admin) {
+          setIsAuthenticated(true);
+          localStorage.setItem('natnat_admin_auth', 'true');
+        } else {
+          setIsAuthenticated(false);
+          localStorage.removeItem('natnat_admin_auth');
+          await supabase.auth.signOut();
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   // UI tabs
   const [activeTab, setActiveTab] = useState<AdminTab>('beranda_tentang');
@@ -144,6 +199,12 @@ export default function AdminPanel({
     setTimeout(() => setShowNotification(null), 3000);
   };
 
+  // Show sync error to user
+  const triggerError = (msg: string) => {
+    setShowNotification(`⚠ ${msg} — Data tersimpan di browser ini saja. Periksa koneksi Supabase.`);
+    setTimeout(() => setShowNotification(null), 5000);
+  };
+
   // Promos management state and form
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<Promo | null>(null);
@@ -160,8 +221,65 @@ export default function AdminPanel({
   const [isDragging, setIsDragging] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
-  // Supabase sync
-  const { useDB, syncProduct, syncMitra, syncArticle, syncLab, syncOrder, syncDelivery, syncTicket, syncPromo, syncLandingSettings, syncAboutSettings } = useDBSync();
+  // Supabase sync helpers (replaces useDBSync hook)
+  const useDB = isSupabaseConfigured();
+  
+  const syncProduct = async (product: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertProduct(product);
+    else if (action === 'update') await updateProduct(product.id, product);
+    else await deleteProduct(product.id);
+  };
+  const syncMitra = async (mitra: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertMitra(mitra);
+    else if (action === 'update') await updateMitra(mitra.id, mitra);
+    else await deleteMitra(mitra.id);
+  };
+  const syncArticle = async (article: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertArticle(article);
+    else if (action === 'update') await updateArticle(article.id, article);
+    else await deleteArticle(article.id);
+  };
+  const syncLab = async (lab: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertLabReport(lab);
+    else if (action === 'update') await updateLabReport(lab.id, lab);
+    else await deleteLabReport(lab.id);
+  };
+  const syncOrder = async (order: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertOrder(order);
+    else if (action === 'update') await updateOrder(order.id, order);
+    else await deleteOrder(order.id);
+  };
+  const syncDelivery = async (delivery: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertDelivery(delivery);
+    else if (action === 'update') await updateDelivery(delivery.id, delivery);
+    else await deleteDelivery(delivery.id);
+  };
+  const syncTicket = async (ticket: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertTicket(ticket);
+    else if (action === 'update') await updateTicket(ticket.id, ticket);
+    else await deleteTicket(ticket.id);
+  };
+  const syncPromo = async (promo: any, action: 'insert' | 'update' | 'delete') => {
+    if (!useDB) return;
+    if (action === 'insert') await insertPromo(promo);
+    else if (action === 'update') await updatePromo(promo.id, promo);
+    else await deletePromo(promo.id);
+  };
+  const syncLandingSettings = async (settings: any) => {
+    if (!useDB) return;
+    await upsertLandingSettings(settings);
+  };
+  const syncAboutSettings = async (settings: any) => {
+    if (!useDB) return;
+    await upsertAboutSettings(settings);
+  };
 
   // Compress image helper using canvas to keep Base64 size lightweight (~100KB instead of 5MB)
   const compressImage = (file: File): Promise<string> => {
@@ -288,7 +406,7 @@ export default function AdminPanel({
       return;
     }
     const promoData: Promo = {
-      id: editingPromo ? editingPromo.id : `promo-${Date.now()}`,
+      id: editingPromo ? editingPromo.id : `promo-${crypto.randomUUID().slice(0, 8)}`,
       ...promoForm
     };
 
@@ -302,8 +420,8 @@ export default function AdminPanel({
     }
 
     setPromos(updatedPromos);
-    if (editingPromo) { syncPromo(promoData, 'update').catch(console.error); }
-    else { syncPromo(promoData, 'insert').catch(console.error); }
+    if (editingPromo) { syncPromo(promoData, 'update').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
+    else { syncPromo(promoData, 'insert').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
     setIsPromoModalOpen(false);
   };
 
@@ -311,7 +429,7 @@ export default function AdminPanel({
     if (confirm('Apakah Anda yakin ingin menghapus promo ini?')) {
       const updatedPromos = promos.filter(p => p.id !== id);
       setPromos(updatedPromos);
-      syncPromo({ id }, 'delete').catch(console.error);
+      syncPromo({ id }, 'delete').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
       triggerNotification('Promo berhasil dihapus!');
     }
   };
@@ -329,19 +447,63 @@ export default function AdminPanel({
   };
 
 
-  // Login handler
-  const handleLogin = (e: React.FormEvent) => {
+  // Auth handlers
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passcode === 'admin') {
-      setIsAuthenticated(true);
-      localStorage.setItem('natnat_admin_auth', 'true');
-      setAuthError('');
-    } else {
-      setAuthError('Passcode salah! Petunjuk: Gunakan passcode "admin"');
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const result = await loginWithEmail(email, password);
+      if (result.success) {
+        setIsAuthenticated(true);
+        localStorage.setItem('natnat_admin_auth', 'true');
+        setEmail('');
+        setPassword('');
+      } else {
+        setAuthError(result.error || 'Login gagal');
+      }
+    } catch {
+      setAuthError('Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setAuthLoading(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleRegisterFirstAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const result = await registerFirstAdmin(email, password);
+      if (result.success) {
+        setIsAuthenticated(true);
+        localStorage.setItem('natnat_admin_auth', 'true');
+        setEmail('');
+        setPassword('');
+      } else {
+        setAuthError(result.error || 'Pendaftaran gagal');
+      }
+    } catch {
+      setAuthError('Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleEmergencyLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passcode === ADMIN_PASSCODE) {
+      setIsAuthenticated(true);
+      localStorage.setItem('natnat_admin_auth', 'true');
+      setPasscode('');
+      setAuthError('');
+    } else {
+      setAuthError('Passcode salah! Hubungi administrator untuk mendapatkan passcode.');
+    }
+  };
+
+  const handleLogout = async () => {
+    await authLogout();
     setIsAuthenticated(false);
     localStorage.removeItem('natnat_admin_auth');
   };
@@ -392,7 +554,7 @@ export default function AdminPanel({
     e.preventDefault();
     const certifications = prodCertString.split(',').map(s => s.trim()).filter(Boolean);
     const productData: Product = {
-      id: editingProduct ? editingProduct.id : `prod-${Date.now()}`,
+      id: editingProduct ? editingProduct.id : `prod-${crypto.randomUUID().slice(0, 8)}`,
       ...prodForm,
       certifications
     };
@@ -408,8 +570,8 @@ export default function AdminPanel({
 
     setProducts(updatedProducts);
     localStorage.setItem('natnat_products_v2', JSON.stringify(updatedProducts));
-    if (editingProduct) { syncProduct(productData, 'update').catch(console.error); }
-    else { syncProduct(productData, 'insert').catch(console.error); }
+    if (editingProduct) { syncProduct(productData, 'update').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
+    else { syncProduct(productData, 'insert').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
     setIsProductModalOpen(false);
   };
 
@@ -418,7 +580,7 @@ export default function AdminPanel({
       const updated = products.filter(p => p.id !== id);
       setProducts(updated);
       localStorage.setItem('natnat_products_v2', JSON.stringify(updated));
-      syncProduct({ id }, 'delete').catch(console.error);
+      syncProduct({ id }, 'delete').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
       triggerNotification('Produk berhasil dihapus!');
     }
   };
@@ -454,7 +616,7 @@ export default function AdminPanel({
   const handleArticleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const articleData: Article = {
-      id: editingArticle ? editingArticle.id : `art-${Date.now()}`,
+      id: editingArticle ? editingArticle.id : `art-${crypto.randomUUID().slice(0, 8)}`,
       ...artForm
     };
 
@@ -469,8 +631,8 @@ export default function AdminPanel({
 
     setArticles(updatedArticles);
     localStorage.setItem('natnat_articles_v2', JSON.stringify(updatedArticles));
-    if (editingArticle) { syncArticle(articleData, 'update').catch(console.error); }
-    else { syncArticle(articleData, 'insert').catch(console.error); }
+    if (editingArticle) { syncArticle(articleData, 'update').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
+    else { syncArticle(articleData, 'insert').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
     setIsArticleModalOpen(false);
   };
 
@@ -479,7 +641,7 @@ export default function AdminPanel({
       const updated = articles.filter(a => a.id !== id);
       setArticles(updated);
       localStorage.setItem('natnat_articles_v2', JSON.stringify(updated));
-      syncArticle({ id }, 'delete').catch(console.error);
+      syncArticle({ id }, 'delete').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
       triggerNotification('Artikel berhasil dihapus!');
     }
   };
@@ -519,7 +681,7 @@ export default function AdminPanel({
   const handleLabSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const labData: LabReport = {
-      id: editingLab ? editingLab.id : `lab-${Date.now()}`,
+      id: editingLab ? editingLab.id : `lab-${crypto.randomUUID().slice(0, 8)}`,
       ...labForm
     };
 
@@ -534,8 +696,8 @@ export default function AdminPanel({
 
     setLabReports(updatedLabs);
     localStorage.setItem('natnat_lab_reports_v2', JSON.stringify(updatedLabs));
-    if (editingLab) { syncLab(labData, 'update').catch(console.error); }
-    else { syncLab(labData, 'insert').catch(console.error); }
+    if (editingLab) { syncLab(labData, 'update').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
+    else { syncLab(labData, 'insert').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
     setIsLabModalOpen(false);
   };
 
@@ -544,7 +706,7 @@ export default function AdminPanel({
       const updated = labReports.filter(l => l.id !== id);
       setLabReports(updated);
       localStorage.setItem('natnat_lab_reports_v2', JSON.stringify(updated));
-      syncLab({ id }, 'delete').catch(console.error);
+      syncLab({ id }, 'delete').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
       triggerNotification('Data analisis batch berhasil dihapus!');
     }
   };
@@ -582,7 +744,7 @@ export default function AdminPanel({
   const handleMitraSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const mData: MitraSPPG = {
-      id: editingMitra ? editingMitra.id : `mitra-${Date.now()}`,
+      id: editingMitra ? editingMitra.id : `mitra-${crypto.randomUUID().slice(0, 8)}`,
       ...mitraForm
     };
 
@@ -597,8 +759,8 @@ export default function AdminPanel({
 
     setMitraList(updatedMitra);
     localStorage.setItem('natnat_mitra_v2', JSON.stringify(updatedMitra));
-    if (editingMitra) { syncMitra(mData, 'update').catch(console.error); }
-    else { syncMitra(mData, 'insert').catch(console.error); }
+    if (editingMitra) { syncMitra(mData, 'update').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
+    else { syncMitra(mData, 'insert').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase')); }
     setIsMitraModalOpen(false);
   };
 
@@ -607,7 +769,7 @@ export default function AdminPanel({
       const updated = mitraList.filter(m => m.id !== id);
       setMitraList(updated);
       localStorage.setItem('natnat_mitra_v2', JSON.stringify(updated));
-      syncMitra({ id }, 'delete').catch(console.error);
+      syncMitra({ id }, 'delete').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
       triggerNotification('Kemitraan berhasil dihapus!');
     }
   };
@@ -617,7 +779,7 @@ export default function AdminPanel({
     e.preventDefault();
     setLandingSettings(tempLanding);
     localStorage.setItem('natnat_landing_settings_v2', JSON.stringify(tempLanding));
-    syncLandingSettings(tempLanding).catch(console.error);
+    syncLandingSettings(tempLanding).catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
     triggerNotification('Pengaturan Landing Page berhasil disimpan!');
   };
 
@@ -630,7 +792,7 @@ export default function AdminPanel({
     };
     setAboutSettings(updatedAbout);
     localStorage.setItem('natnat_about_settings_v2', JSON.stringify(updatedAbout));
-    syncAboutSettings(updatedAbout).catch(console.error);
+    syncAboutSettings(updatedAbout).catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
     triggerNotification('Profil & Visi Misi berhasil disimpan!');
   };
 
@@ -639,7 +801,7 @@ export default function AdminPanel({
     const updated = orders.map(o => o.id === id ? { ...o, status: newStatus } : o);
     setOrders(updated);
     localStorage.setItem('natnat_orders', JSON.stringify(updated));
-    syncOrder({ id, status: newStatus }, 'update').catch(console.error);
+    syncOrder({ id, status: newStatus }, 'update').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
     triggerNotification(`Status pesanan ${id} diubah menjadi: ${newStatus}`);
   };
 
@@ -647,7 +809,7 @@ export default function AdminPanel({
     const updated = tickets.map(t => t.id === id ? { ...t, status: newStatus } : t);
     setTickets(updated);
     localStorage.setItem('natnat_tickets', JSON.stringify(updated));
-    syncTicket({ id, status: newStatus }, 'update').catch(console.error);
+    syncTicket({ id, status: newStatus }, 'update').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
     triggerNotification(`Status tiket aduan ${id} diubah menjadi: ${newStatus}`);
   };
 
@@ -655,7 +817,7 @@ export default function AdminPanel({
     const updated = tickets.map(t => t.id === id ? { ...t, status: 'Selesai' as const, resolution } : t);
     setTickets(updated);
     localStorage.setItem('natnat_tickets', JSON.stringify(updated));
-    syncTicket({ id, status: 'Selesai', resolution }, 'update').catch(console.error);
+    syncTicket({ id, status: 'Selesai', resolution }, 'update').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
     triggerNotification(`Aduan tiket ${id} berhasil diselesaikan!`);
   };
 
@@ -664,7 +826,7 @@ export default function AdminPanel({
       const updated = tickets.filter(t => t.id !== id);
       setTickets(updated);
       localStorage.setItem('natnat_tickets', JSON.stringify(updated));
-      syncTicket({ id }, 'delete').catch(console.error);
+      syncTicket({ id }, 'delete').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
       triggerNotification('Tiket aduan berhasil dihapus!');
     }
   };
@@ -674,12 +836,14 @@ export default function AdminPanel({
       const updated = orders.filter(o => o.id !== id);
       setOrders(updated);
       localStorage.setItem('natnat_orders', JSON.stringify(updated));
-      syncOrder({ id }, 'delete').catch(console.error);
+      syncOrder({ id }, 'delete').catch(err => triggerError(err.message || 'Gagal menyinkronkan ke Supabase'));
       triggerNotification('Log pesanan berhasil dihapus!');
     }
   };
 
   if (!isAuthenticated) {
+    const supabaseAvailable = isSupabaseConfigured();
+    
     return (
       <div className="max-w-md mx-auto px-4 py-20 animate-in fade-in duration-300">
         <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl p-8 space-y-6 text-center">
@@ -694,39 +858,212 @@ export default function AdminPanel({
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4 text-left">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
-                Passcode Admin
-              </label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+          {/* Tab Switcher */}
+          <div className="flex rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => setAuthMethod('email')}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                authMethod === 'email'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Masuk
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuthMethod('passcode')}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                authMethod === 'passcode'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Akses Darurat
+            </button>
+          </div>
+
+          {/* Email Login Form */}
+          {authMethod === 'email' && (
+            <form onSubmit={handleEmailLogin} className="space-y-4 text-left">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
+                  Email
+                </label>
                 <input
-                  type="password"
-                  placeholder="Masukkan passcode..."
-                  value={passcode}
-                  onChange={(e) => setPasscode(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-sky-400 focus:bg-white rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-sky-100 font-mono"
-                  autoFocus
+                  type="email"
+                  placeholder="admin@natnat.co.id"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-sky-400 focus:bg-white rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-sky-100"
                 />
               </div>
-              {authError && <p className="text-red-500 text-[11px] mt-1.5 font-medium">{authError}</p>}
-            </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="Masukkan password..."
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-sky-400 focus:bg-white rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-sky-100"
+                />
+              </div>
 
-            <div className="bg-sky-50 border border-sky-100 rounded-xl p-3 text-[11px] text-sky-700 space-y-1">
-              <span className="font-bold flex items-center">
-                <Sparkles className="w-3.5 h-3.5 mr-1" /> Petunjuk Pengujian Pengguna:
-              </span>
-              <p>Masukkan passcode <code className="bg-white px-1.5 py-0.5 rounded border border-sky-200 font-bold text-sky-800">admin</code> untuk masuk secara langsung.</p>
-            </div>
+              {!supabaseAvailable && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-700">
+                  <span className="font-bold">⚠ Supabase belum dikonfigurasi.</span>
+                  <p className="mt-1">Gunakan tab "Akses Darurat" dengan passcode admin, atau konfigurasikan VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di Vercel.</p>
+                </div>
+              )}
 
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm tracking-wider transition-all"
-            >
-              Masuk Dashboard
-            </button>
-          </form>
+              {authError && <p className="text-red-500 text-[11px] font-medium">{authError}</p>}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {authLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Memverifikasi...</span>
+                  </>
+                ) : (
+                  <span>Masuk Dashboard</span>
+                )}
+              </button>
+
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-100"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-3 bg-white text-slate-400">atau</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setAuthMethod('register')}
+                className="w-full py-2.5 rounded-xl border-2 border-sky-200 text-sky-700 hover:bg-sky-50 font-bold text-xs tracking-wider transition-all"
+              >
+                Daftar Admin Pertama
+              </button>
+            </form>
+          )}
+
+          {/* Register First Admin Form */}
+          {authMethod === 'register' && (
+            <form onSubmit={handleRegisterFirstAdmin} className="space-y-4 text-left">
+              <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 text-[11px] text-sky-800">
+                <span className="font-bold">📝 Daftar Admin Pertama</span>
+                <p className="mt-1">Hanya bisa dilakukan jika belum ada admin yang terdaftar. Setelah admin pertama dibuat, gunakan form Masuk untuk login.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
+                  Email Admin
+                </label>
+                <input
+                  type="email"
+                  placeholder="admin@natnat.co.id"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-sky-400 focus:bg-white rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-sky-100"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="Buat password yang kuat..."
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-sky-400 focus:bg-white rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-sky-100"
+                />
+              </div>
+
+              {authError && <p className="text-red-500 text-[11px] font-medium">{authError}</p>}
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {authLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Mendaftar...</span>
+                  </>
+                ) : (
+                  <span>Daftar Admin Pertama</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('email'); setAuthError(''); }}
+                className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 font-medium transition-colors"
+              >
+                ← Kembali ke Masuk
+              </button>
+            </form>
+          )}
+
+          {/* Emergency Passcode Form */}
+          {authMethod === 'passcode' && (
+            <form onSubmit={handleEmergencyLogin} className="space-y-4 text-left">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-widest mb-1.5">
+                  Passcode Admin
+                </label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                  <input
+                    type="password"
+                    placeholder="Masukkan passcode..."
+                    value={passcode}
+                    onChange={(e) => setPasscode(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-sky-400 focus:bg-white rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-sky-100 font-mono"
+                    autoFocus
+                  />
+                </div>
+                {authError && <p className="text-red-500 text-[11px] mt-1.5 font-medium">{authError}</p>}
+              </div>
+
+              <div className="bg-sky-50 border border-sky-100 rounded-xl p-3 text-[11px] text-sky-700 space-y-1">
+                <span className="font-bold flex items-center">
+                  <Sparkles className="w-3.5 h-3.5 mr-1" /> Akses Darurat:
+                </span>
+                <p>Gunakan passcode admin untuk masuk langsung. Passcode diatur oleh administrator sistem.</p>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm tracking-wider transition-all"
+              >
+                Masuk Dashboard
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setAuthMethod('email'); setAuthError(''); }}
+                className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 font-medium transition-colors"
+              >
+                ← Kembali ke Login Email
+              </button>
+            </form>
+          )}
         </div>
       </div>
     );

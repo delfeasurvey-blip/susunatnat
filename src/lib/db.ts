@@ -16,7 +16,7 @@ export async function fetchProducts(): Promise<Product[]> {
 }
 
 export async function insertProduct(product: Omit<Product, 'id'>): Promise<Product | null> {
-  const id = `prod-${Date.now()}`;
+  const id = `prod-${crypto.randomUUID().slice(0, 8)}`;
   const { data, error } = await supabase
     .from('products')
     .insert({ ...product, id })
@@ -56,7 +56,7 @@ export async function fetchMitra(): Promise<MitraSPPG[]> {
 }
 
 export async function insertMitra(mitra: Omit<MitraSPPG, 'id'>): Promise<MitraSPPG | null> {
-  const id = `mitra-${Date.now()}`;
+  const id = `mitra-${crypto.randomUUID().slice(0, 8)}`;
   const { data, error } = await supabase
     .from('mitra_sppg')
     .insert({ ...mitra, id })
@@ -96,7 +96,7 @@ export async function fetchArticles(): Promise<Article[]> {
 }
 
 export async function insertArticle(article: Omit<Article, 'id'>): Promise<Article | null> {
-  const id = `art-${Date.now()}`;
+  const id = `art-${crypto.randomUUID().slice(0, 8)}`;
   const { data, error } = await supabase
     .from('articles')
     .insert({ ...article, id })
@@ -136,7 +136,7 @@ export async function fetchLabReports(): Promise<LabReport[]> {
 }
 
 export async function insertLabReport(report: Omit<LabReport, 'id'>): Promise<LabReport | null> {
-  const id = `lab-${Date.now()}`;
+  const id = `lab-${crypto.randomUUID().slice(0, 8)}`;
   const { data, error } = await supabase
     .from('lab_reports')
     .insert({ ...report, id })
@@ -176,7 +176,7 @@ export async function fetchOrders(): Promise<Order[]> {
 }
 
 export async function insertOrder(order: Omit<Order, 'id'>): Promise<Order | null> {
-  const id = `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Math.floor(Math.random() * 99) + 1).padStart(2, '0')}`;
+  const id = `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${crypto.randomUUID().slice(0, 8)}`;
   const { data, error } = await supabase
     .from('orders')
     .insert({ ...order, id })
@@ -216,7 +216,7 @@ export async function fetchDeliveries(): Promise<DeliveryLog[]> {
 }
 
 export async function insertDelivery(delivery: Omit<DeliveryLog, 'id'>): Promise<DeliveryLog | null> {
-  const id = `TRK-${Date.now()}`;
+  const id = `TRK-${crypto.randomUUID().slice(0, 8)}`;
   const { data, error } = await supabase
     .from('deliveries')
     .insert({ ...delivery, id })
@@ -256,7 +256,7 @@ export async function fetchTickets(): Promise<Ticket[]> {
 }
 
 export async function insertTicket(ticket: Omit<Ticket, 'id'>): Promise<Ticket | null> {
-  const id = `TCK-${Date.now()}`;
+  const id = `TCK-${crypto.randomUUID().slice(0, 8)}`;
   const { data, error } = await supabase
     .from('tickets')
     .insert({ ...ticket, id })
@@ -296,7 +296,7 @@ export async function fetchPromos(): Promise<Promo[]> {
 }
 
 export async function insertPromo(promo: Omit<Promo, 'id'>): Promise<Promo | null> {
-  const id = `promo-${Date.now()}`;
+  const id = `promo-${crypto.randomUUID().slice(0, 8)}`;
   const { data, error } = await supabase
     .from('promos')
     .insert({ ...promo, id })
