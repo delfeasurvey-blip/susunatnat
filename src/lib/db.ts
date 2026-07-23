@@ -331,7 +331,7 @@ export async function fetchLandingSettings(): Promise<Record<string, any> | null
     .from('landing_settings')
     .select('*')
     .eq('id', 1)
-    .single();
+    .maybeSingle();
   if (error) { console.error('fetchLandingSettings error:', error); return null; }
   return data || null;
 }
@@ -352,7 +352,7 @@ export async function fetchAboutSettings(): Promise<Record<string, any> | null> 
     .from('about_settings')
     .select('*')
     .eq('id', 1)
-    .single();
+    .maybeSingle();
   if (error) { console.error('fetchAboutSettings error:', error); return null; }
   return data || null;
 }
@@ -370,22 +370,22 @@ export async function upsertAboutSettings(settings: Record<string, any>): Promis
 // =============================================
 export async function seedInitialData(): Promise<void> {
   // Check if data already exists
-  const { count: productCount } = await supabase.from('products').select('*', { count: 'exact', head: true });
-  if (productCount && productCount > 0) return; // Already seeded
+  const { data: existingProducts } = await supabase.from('products').select('id').limit(1);
+  if (existingProducts && existingProducts.length > 0) return; // Already seeded
 
   // Import and seed all initial data
   const { PRODUCTS, MITRA_SPPG, ARTICLES, LAB_REPORTS, INITIAL_ORDERS, INITIAL_DELIVERIES, INITIAL_TICKETS, INITIAL_PROMOS } = await import('../data');
 
-  // Insert all data in parallel
+  // Insert all data in parallel using upsert (safe for re-runs)
   const [prodResult, mitraResult, artResult, labResult, orderResult, delivResult, ticketResult, promoResult] = await Promise.all([
-    supabase.from('products').insert(PRODUCTS.map(p => ({ ...p, id: p.id }))),
-    supabase.from('mitra_sppg').insert(MITRA_SPPG.map(m => ({ ...m, id: m.id }))),
-    supabase.from('articles').insert(ARTICLES.map(a => ({ ...a, id: a.id }))),
-    supabase.from('lab_reports').insert(LAB_REPORTS.map(l => ({ ...l, id: l.id }))),
-    supabase.from('orders').insert(INITIAL_ORDERS.map(o => ({ ...o, id: o.id }))),
-    supabase.from('deliveries').insert(INITIAL_DELIVERIES.map(d => ({ ...d, id: d.id }))),
-    supabase.from('tickets').insert(INITIAL_TICKETS.map(t => ({ ...t, id: t.id }))),
-    supabase.from('promos').insert(INITIAL_PROMOS.map(p => ({ ...p, id: p.id }))),
+    supabase.from('products').upsert(PRODUCTS.map(p => ({ ...p, id: p.id }))),
+    supabase.from('mitra_sppg').upsert(MITRA_SPPG.map(m => ({ ...m, id: m.id }))),
+    supabase.from('articles').upsert(ARTICLES.map(a => ({ ...a, id: a.id }))),
+    supabase.from('lab_reports').upsert(LAB_REPORTS.map(l => ({ ...l, id: l.id }))),
+    supabase.from('orders').upsert(INITIAL_ORDERS.map(o => ({ ...o, id: o.id }))),
+    supabase.from('deliveries').upsert(INITIAL_DELIVERIES.map(d => ({ ...d, id: d.id }))),
+    supabase.from('tickets').upsert(INITIAL_TICKETS.map(t => ({ ...t, id: t.id }))),
+    supabase.from('promos').upsert(INITIAL_PROMOS.map(p => ({ ...p, id: p.id }))),
   ]);
 
   // Check for errors
